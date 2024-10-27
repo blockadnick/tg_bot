@@ -83,7 +83,7 @@ class Bot:
         method = 'sendMessage'
         params = {'chat_id': self.__admin_id,
                   'parse_mode': parse_mode,
-                  'text': f'email: y.dymnov+{text}@amarkets.com\nphone: +790000000{text}'}
+                  'text': 'nothing'}
         resp = requests.post(self.__api_url + method, params)
         if not resp.ok:
             print(resp.text)
@@ -123,7 +123,7 @@ class Bot:
         if command == "/start":
             self.initialize()
         elif command == "/stage":
-            print(f'email: y.dymnov+{result}@amarkets.com\nphone: +790000000{result}')
+            print(f'nothing')
             self.text_admin(result) 
         elif command == "/prod":
             self.text_admin('nothing') 
