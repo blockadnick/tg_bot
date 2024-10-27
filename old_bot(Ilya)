@@ -1,0 +1,135 @@
+import requests
+from config import TOKEN, ADMIN_ID
+
+
+class Bot:
+    """
+    Можно инициировать бот для получения и обработки запросов, метод initialize
+    Либо отправить сообщение админу, методом text_admin.
+
+    """
+    def __init__(self, token: str, admin_id: int | None = None):
+        """
+        token - токен бота, выданный в botfather.
+        admin_id - опционально, например, для уведомлений в личку админа; этот
+        параметр можно узнать при первом считывании ответа от бота. Реализовать
+        отдельный метод мне лень :D
+        """
+        self.__api_url = f"https://api.telegram.org/bot{token}/"
+        self.__admin_id = admin_id
+        # подробно об этом параметре - в методе _get_updates.
+        self.offset = -1
+
+    def _get_updates(self, timeout=100) -> list[dict]:
+        """
+        Метод посылает "долгий" запрос на обновления.
+        В течение timeout секунд ждёт ответа от сервера, если обновлений нет -
+        выдает json:
+        {
+            "ok": true,
+            "result": []
+        }
+        У каждого ПОЛУЧЕННОГО обновления есть свой id.
+        Параметр запроса offset позволяет запросить обновления, начиная с этого
+        id. Поэтому, чтобы запросить новые обновления, нужно указать id
+        последнего полученного обновления + 1.
+        Например, update_id последнего сообщения - 15448517.
+        Чтобы послать запрос на ожидание нового обновления, нужно указать
+        offset 15448517 + 1, то есть 15448518.
+        При инициализации объекта Bot, параметр offset задаётся как -1.
+        Это означает, что мы не знаем значение последнего обновления, поэтому
+        запрашиваем ПОСЛЕДНЕЕ.
+        При каждом запуске бот будет посылать ответ на последнее сообщение.
+        """
+        method = 'getUpdates'
+        params = {'timeout': timeout, 'offset': self.offset}
+        resp = requests.get(self.__api_url+method, params=params)
+        result_json = resp.json()['result']
+        return result_json
+
+    def _set_offset(self, offset: int) -> None:
+        self.offset = offset+1
+
+    def initialize(self):
+        while True:
+            update = self._get_updates()
+            # если результата нет - запрос посылается заново
+            if update:
+                # обновляем offset (номер следующего ожидаемого update_id)
+                self._set_offset(update[0].get('update_id'))
+                try:
+                    # передаём результат в обработчик результатов
+                    self.handle_result(update)
+                except Exception as E:
+                    # Так делать нельзя, но сейчас это гарантирует, что бот не
+                    # упадёт. В грамотной реализации все ошибки нужно знать
+                    # и уметь их обработать!
+                    print(E)
+                    pass
+
+    def text_admin(self, text: str) -> int:
+        """
+        Присылает в лс администратору сообщение с текстом.
+        Возвращает status_code запроса, чтобы понять, дошло ли сообщение.
+        Если admin_id не был указан при инициализации объекта - вернет 401.
+        Можно переписать этот метод так, чтобы он отвечал в любом чате с ним.
+        Для этого нужно на входе получить id чата и подставить в его в params.
+        """
+        if not self.__admin_id:
+            print("admin_id не был указан при инициализации")
+            return 401
+
+        parse_mode = 'Markdown'
+        method = 'sendMessage'
+        params = {'chat_id': self.__admin_id,
+                  'parse_mode': parse_mode,
+                  'text': f'email: y.dymnov+{text}@amarkets.com\nphone: +790000000{text}'}
+        resp = requests.post(self.__api_url + method, params)
+        if not resp.ok:
+            print(resp.text)
+        return resp.status_code
+    
+
+    def handle_result(self, result: list[dict]) -> None:
+        """
+        Главный обработчик результатов запросов.
+        Здесь можно подключить функции из другого модуля или вообще
+        переопределить этот метод, например так:
+
+        class MyBot(Bot):
+            # Инициализация MyBot, он должен принять и передать аргументы
+            # в Bot, поэтому принимает те же аргументы, что и Bot (как минимум)
+            def __init__(self, token: str, admin_id: int | None = None):
+                # инициализация Bot, ему нужны 2 параметра
+                super().__init__(token, admin)
+
+            def handle_result(self):
+                # твоя реализация handle_result
+                pass
+
+        Основная стратегия обработки результатов:
+          1. Определить тип сообщения боту: текст/картинка/локация/аудио и т.д.
+          2. Определить подтип сообщения, например, какая команда в тексте?
+          "/weather", "/send_meme", "/report курс доллара к рублю" и т.д.
+          3. Спарсить необходимые переменные из команды, выполнить функцию
+          4. Прислать ответ (например, методом text_admin)
+        """
+        # print(result)
+        text = result[0]['message']['text']
+        command = text.split(" ")[0]
+        update_id = result[0]['update_id']
+        result = str(update_id - 439344386)
+
+        if command == "/start":
+            self.initialize()
+        elif command == "/stage":
+            print(f'email: y.dymnov+{result}@amarkets.com\nphone: +790000000{result}')
+            self.text_admin(result) 
+        elif command == "/prod":
+            self.text_admin('nothing') 
+        else:
+            self.text_admin('error, use a command list')
+
+
+bot = Bot(TOKEN, ADMIN_ID)
+bot.initialize()
