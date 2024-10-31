@@ -28,6 +28,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await update.message.reply_text(help_text)
 
 async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    logger_info_for_admin(update)
     await update.message.reply_text("Enter a symbol to get current price:")
     context.user_data['awaiting_symbol'] = True
 
